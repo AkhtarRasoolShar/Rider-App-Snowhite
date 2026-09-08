@@ -9,27 +9,64 @@ end_str = "@OptIn(ExperimentalMaterial3Api::class)\n@Composable\nfun QuickReplie
 start_idx = content.find(start_str)
 end_idx = content.find(end_str)
 
-if start_idx == -1 or end_idx == -1:
-    print("Could not find bounds")
-    exit(1)
-
 # Backtrack start_idx to include the @Composable annotation if it exists
 composable_idx = content.rfind("@Composable", 0, start_idx)
 if composable_idx != -1 and start_idx - composable_idx < 30:
     start_idx = composable_idx
 
-new_profile = """@Composable
+new_profile = """@OptIn(ExperimentalMaterial3Api::class)
+@Composable
 fun ProfileScreen(viewModel: RiderViewModel, navController: NavHostController) {
     val context = LocalContext.current
     val name by viewModel.riderName.collectAsState()
     val zone by viewModel.riderZone.collectAsState()
+    val riderEmail by viewModel.riderEmail.collectAsState()
     
+    var emailInput by remember { mutableStateOf(riderEmail) }
     var address by remember { mutableStateOf(viewModel.homeAddress.value) }
     var bankName by remember { mutableStateOf(viewModel.bankName.value) }
     var bankIban by remember { mutableStateOf(viewModel.bankIban.value) }
     var whatsapp by remember { mutableStateOf(if (viewModel.whatsappNumber.value.isNotEmpty()) viewModel.whatsappNumber.value else viewModel.riderPhone.value) }
 
     val scrollState = rememberScrollState()
+
+    // OTP State
+    var otpInput by remember { mutableStateOf("") }
+
+    if (viewModel.showProfileOtpDialog) {
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { viewModel.showProfileOtpDialog = false },
+            title = { Text("Verify Email", fontWeight = FontWeight.Bold) },
+            text = {
+                Column {
+                    Text("Enter the OTP sent to your registered email.")
+                    Spacer(Modifier.height(16.dp))
+                    OutlinedTextField(
+                        value = otpInput,
+                        onValueChange = { otpInput = it },
+                        label = { Text("OTP Code") },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true,
+                        keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Number)
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = { viewModel.verifyProfileOtp(context, otpInput, address, bankName, bankIban) },
+                    enabled = !viewModel.isProfileUpdating
+                ) {
+                    if (viewModel.isProfileUpdating) CircularProgressIndicator(color = Color.White, modifier = Modifier.size(16.dp))
+                    else Text("Verify & Save")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { viewModel.showProfileOtpDialog = false }) {
+                    Text("Cancel", color = ErrorRed)
+                }
+            }
+        )
+    }
 
     Box(modifier = Modifier.fillMaxSize().background(Color(0xFFF8F9FA))) {
         // Gradient Header Background
@@ -118,6 +155,20 @@ fun ProfileScreen(viewModel: RiderViewModel, navController: NavHostController) {
                 Spacer(Modifier.height(12.dp))
                 
                 OutlinedTextField(
+                    value = emailInput,
+                    onValueChange = { emailInput = it },
+                    label = { Text("Email Address") },
+                    leadingIcon = { Icon(Icons.Default.Email, contentDescription = null, tint = TealAccent) },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = TealAccent,
+                        unfocusedBorderColor = Color(0xFFE2E8F0)
+                    )
+                )
+                Spacer(Modifier.height(12.dp))
+                
+                OutlinedTextField(
                     value = address,
                     onValueChange = { address = it },
                     label = { Text("Home Address") },
@@ -176,14 +227,21 @@ fun ProfileScreen(viewModel: RiderViewModel, navController: NavHostController) {
                 Spacer(Modifier.height(32.dp))
                 Button(
                     onClick = { 
-                        viewModel.saveProfileDetails(context, address, bankName, bankIban, viewModel.quickReply1.value, viewModel.quickReply2.value)
-                        viewModel.updateWhatsApp(context, whatsapp) 
+                        if (emailInput != riderEmail || whatsapp != viewModel.whatsappNumber.value) {
+                            viewModel.requestProfileOtp(context, emailInput, whatsapp)
+                        } else {
+                            viewModel.saveProfileDetails(context, address, bankName, bankIban, viewModel.quickReply1.value, viewModel.quickReply2.value)
+                            viewModel.updateWhatsApp(context, whatsapp)
+                            Toast.makeText(context, "Profile updated successfully!", Toast.LENGTH_SHORT).show()
+                        }
                     },
                     modifier = Modifier.fillMaxWidth().height(56.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = TealAccent),
-                    shape = RoundedCornerShape(16.dp)
+                    shape = RoundedCornerShape(16.dp),
+                    enabled = !viewModel.isProfileUpdating
                 ) {
-                    Text("SAVE CHANGES", color = Color.White, fontWeight = FontWeight.ExtraBold, fontSize = 16.sp)
+                    if (viewModel.isProfileUpdating && !viewModel.showProfileOtpDialog) CircularProgressIndicator(color = Color.White, modifier = Modifier.size(24.dp))
+                    else Text("SAVE CHANGES", color = Color.White, fontWeight = FontWeight.ExtraBold, fontSize = 16.sp)
                 }
                 
                 Spacer(Modifier.height(32.dp))
@@ -215,38 +273,9 @@ fun ProfileScreen(viewModel: RiderViewModel, navController: NavHostController) {
         }
     }
 }
-
-@Composable
-fun StatItem(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, value: String) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Icon(icon, contentDescription = null, tint = TealAccent, modifier = Modifier.size(28.dp))
-        Spacer(Modifier.height(4.dp))
-        Text(value, fontWeight = FontWeight.Bold, fontSize = 18.sp, color = Color(0xFF1E293B))
-        Text(label, fontSize = 12.sp, color = Color(0xFF64748B))
-    }
-}
-
-@Composable
-fun SettingsRow(icon: androidx.compose.ui.graphics.vector.ImageVector, text: String, isDestructive: Boolean = false, onClick: () -> Unit) {
-    val color = if (isDestructive) ErrorRed else Color(0xFF334155)
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick)
-            .padding(16.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Icon(icon, contentDescription = null, tint = color, modifier = Modifier.size(24.dp))
-        Spacer(Modifier.width(16.dp))
-        Text(text, fontWeight = FontWeight.SemiBold, fontSize = 15.sp, color = color, modifier = Modifier.weight(1f))
-        Icon(Icons.Default.ChevronRight, contentDescription = null, tint = Color(0xFF94A3B8), modifier = Modifier.size(20.dp))
-    }
-}
-
 """
 
-new_content = content[:start_idx] + new_profile + content[end_idx:]
+new_content = content[:start_idx] + new_profile + "\n" + content[end_idx:]
 
 with open("app/src/main/java/com/example/MainActivity.kt", "w") as f:
     f.write(new_content)
-print("Patched successfully")

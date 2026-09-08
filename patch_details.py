@@ -1,166 +1,19 @@
-package com.example
+import re
 
-import coil.compose.AsyncImage
-import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.draw.clip
-import androidx.compose.material.icons.automirrored.filled.Chat
+with open("app/src/main/java/com/example/RiderUI.kt", "r") as f:
+    content = f.read()
 
+start_str = "fun OrderDetailsSheetContent("
+end_str = "    }\n}"
 
-import android.content.Context
-import android.content.Intent
-import android.net.Uri
-import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
+start_idx = content.find(start_str)
+end_idx = content.find(end_str, start_idx) + len(end_str)
 
-// Reusable Modern Order Card
-@Composable
-fun ModernOrderCard(
-    order: RiderOrder,
-    onAccept: () -> Unit,
-    onReject: () -> Unit,
-    onViewDetails: () -> Unit
-) {
-    Card(
-        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.White),
-        shape = RoundedCornerShape(16.dp),
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp)
-    ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                Surface(
-                    color = Color(0xFFE3F2FD),
-                    shape = RoundedCornerShape(8.dp)
-                ) {
-                    Text(
-                        text = "Order #${order.orderId}",
-                        color = Color(0xFF1565C0),
-                        fontWeight = FontWeight.Bold,
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                        fontSize = 14.sp
-                    )
-                }
-                Text(
-                    text = order.status ?: "Pending",
-                    color = Color(0xFFE65100),
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 14.sp
-                )
-            }
-            Spacer(Modifier.height(12.dp))
-            
-            Text(text = order.customerName ?: "Customer", fontWeight = FontWeight.Bold, fontSize = 18.sp, color = Color(0xFF03045E))
-            Spacer(Modifier.height(8.dp))
-            
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Default.LocationOn, contentDescription = "Location", tint = Color.Gray, modifier = Modifier.size(16.dp))
-                Spacer(Modifier.width(4.dp))
-                Text(text = order.pickupAddress ?: "Unknown Location", color = Color.Gray, fontSize = 14.sp)
-            }
-            Spacer(Modifier.height(12.dp))
-            
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                Text("Total Earning", color = Color.Gray, fontSize = 14.sp)
-                Text(text = "PKR ${order.totalAmount ?: "0"}", color = Color(0xFF2E7D32), fontWeight = FontWeight.ExtraBold, fontSize = 18.sp)
-            }
-            Spacer(Modifier.height(16.dp))
-            
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedButton(
-                    onClick = onReject,
-                    modifier = Modifier.weight(1f),
-                    colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.Red),
-                    shape = RoundedCornerShape(12.dp)
-                ) {
-                    Text("Reject")
-                }
-                Button(
-                    onClick = onAccept,
-                    modifier = Modifier.weight(1f),
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF00B4D8)),
-                    shape = RoundedCornerShape(12.dp)
-                ) {
-                    Text("Accept")
-                }
-            }
-            Spacer(Modifier.height(8.dp))
-            TextButton(onClick = onViewDetails, modifier = Modifier.fillMaxWidth()) {
-                Text("View Full Details", color = Color(0xFF00B4D8))
-            }
-        }
-    }
-}
-
-@Composable
-fun WalletScreen(viewModel: RiderViewModel) {
-    // A simple beautiful Wallet UI
-    Column(
-        modifier = Modifier.fillMaxSize().background(Color(0xFFF8F9FA)).padding(16.dp)
-    ) {
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(24.dp),
-            colors = CardDefaults.cardColors(containerColor = Color(0xFF03045E)),
-            elevation = CardDefaults.cardElevation(8.dp)
-        ) {
-            Column(modifier = Modifier.padding(24.dp)) {
-                Text("Available Balance", color = Color.White.copy(alpha = 0.8f), fontSize = 16.sp)
-                Spacer(Modifier.height(8.dp))
-                Text("PKR 4,500.00", color = Color.White, fontSize = 36.sp, fontWeight = FontWeight.ExtraBold)
-                Spacer(Modifier.height(24.dp))
-                Button(
-                    onClick = { /* trigger payout request */ },
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF00B4D8)),
-                    shape = RoundedCornerShape(12.dp),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text("Request Payout", color = Color.White, fontWeight = FontWeight.Bold, modifier = Modifier.padding(vertical = 4.dp))
-                }
-            }
-        }
-        Spacer(Modifier.height(24.dp))
-        Text("Recent Transactions", fontWeight = FontWeight.Bold, fontSize = 18.sp, color = Color(0xFF03045E))
-        Spacer(Modifier.height(16.dp))
-        
-        // Mock Transactions
-        val txns = listOf("Order #101" to "PKR 350", "Order #102" to "PKR 450", "Payout" to "-PKR 500")
-        LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            items(txns) { txn ->
-                Card(
-                    colors = CardDefaults.cardColors(containerColor = Color.White),
-                    shape = RoundedCornerShape(12.dp),
-                    elevation = CardDefaults.cardElevation(2.dp),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Row(
-                        modifier = Modifier.padding(16.dp).fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(txn.first, fontWeight = FontWeight.Medium)
-                        Text(txn.second, color = if (txn.second.startsWith("-")) Color.Red else Color(0xFF2E7D32), fontWeight = FontWeight.Bold)
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-fun OrderDetailsSheetContent(
+if start_idx == -1 or end_idx == -1:
+    print("Bounds not found")
+    exit(1)
+    
+new_sheet = """fun OrderDetailsSheetContent(
     order: RiderOrder,
     isHistory: Boolean,
     onAccept: (() -> Unit)? = null,
@@ -369,7 +222,7 @@ fun OrderDetailsSheetContent(
                     shape = RoundedCornerShape(12.dp),
                     border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFE2E8F0))
                 ) {
-                    Icon(Icons.Default.Email, contentDescription = "Chat", tint = Color(0xFF334155), modifier = Modifier.padding(end = 8.dp))
+                    Icon(Icons.AutoMirrored.Filled.Chat, contentDescription = "Chat", tint = Color(0xFF334155), modifier = Modifier.padding(end = 8.dp))
                     Text("Chat with Customer", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = Color(0xFF334155))
                 }
             }
@@ -395,4 +248,9 @@ fun OrderDetailsSheetContent(
             }
         }
     }
-}
+}"""
+
+content = content[:start_idx] + new_sheet + content[end_idx:]
+
+with open("app/src/main/java/com/example/RiderUI.kt", "w") as f:
+    f.write(content)
