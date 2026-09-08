@@ -436,16 +436,16 @@ class RiderViewModel : ViewModel() {
         viewModelScope.launch {
             try {
                 val response = RetrofitClient.apiService.getAppSettings()
-                if (response.isSuccessful) {
+                if (response.isSuccessful && response.body()?.status == "success") {
                     response.body()?.data?.let {
                         appSettings = it
                     }
                 } else {
-                    android.util.Log.e("AppSettings", "Server Error: ${response.code()}")
+                    // Backend returned error for app settings, ignore silently as fallback values are used.
+                    android.util.Log.w("AppSettings", "Failed to fetch settings, using defaults.")
                 }
             } catch (e: Exception) {
-                e.printStackTrace()
-                android.util.Log.e("AppSettings", "Network Error: ${e.message}")
+                android.util.Log.w("AppSettings", "Network error fetching settings, using defaults.")
             }
         }
     }
@@ -1572,7 +1572,7 @@ fun RiderDashboardScreen(viewModel: RiderViewModel, onNavigateToRadar: () -> Uni
 }
 
 @Composable
-fun MainAppScreen(viewModel: RiderViewModel) {
+fun MainAppScreen(viewModel: RiderViewModel, onLogout: () -> Unit = {}) {
     val navController = rememberNavController()
     val isLoading by viewModel.isLoading.collectAsState()
     val navBackStackEntry by navController.currentBackStackEntryAsState()
@@ -1655,7 +1655,7 @@ fun MainAppScreen(viewModel: RiderViewModel) {
                     onBack = { navController.popBackStack() }
                 )
             }
-            composable("profile") { ProfileScreen(viewModel, navController) }
+            composable("profile") { ProfileScreen(viewModel, navController, onLogout) }
             composable("quickReplies") { QuickRepliesScreen(viewModel, navController) }
         }
         
@@ -1773,7 +1773,7 @@ fun RadarScreen(viewModel: RiderViewModel) {
                             modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Icon(Icons.Default.Sort, contentDescription = "Sort", tint = Color(0xFF64748B), modifier = Modifier.size(16.dp))
+                            Icon(Icons.AutoMirrored.Filled.Sort, contentDescription = "Sort", tint = Color(0xFF64748B), modifier = Modifier.size(16.dp))
                             Spacer(Modifier.width(6.dp))
                             Text(sortOption, color = Color(0xFF334155), fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
                         }
@@ -2165,7 +2165,7 @@ fun HistoryScreen(viewModel: RiderViewModel, navController: androidx.navigation.
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ProfileScreen(viewModel: RiderViewModel, navController: NavHostController) {
+fun ProfileScreen(viewModel: RiderViewModel, navController: NavHostController, onLogout: () -> Unit = {}) {
     val context = LocalContext.current
     val name by viewModel.riderName.collectAsState()
     val zone by viewModel.riderZone.collectAsState()
@@ -2404,16 +2404,16 @@ fun ProfileScreen(viewModel: RiderViewModel, navController: NavHostController) {
                     elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
                 ) {
                     Column {
-                        SettingsRow(icon = Icons.Default.Chat, text = "Manage Quick Replies", onClick = { navController.navigate("quickReplies") })
+                        SettingsRow(icon = Icons.AutoMirrored.Filled.Chat, text = "Manage Quick Replies", onClick = { navController.navigate("quickReplies") })
                         HorizontalDivider(color = Color(0xFFF1F5F9))
                         SettingsRow(icon = Icons.Default.SupportAgent, text = "Contact Support", onClick = {
                             val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://wa.me/923001234567"))
                             try { context.startActivity(intent) } catch (e: Exception) { Toast.makeText(context, "WhatsApp not installed", Toast.LENGTH_SHORT).show() }
                         })
                         HorizontalDivider(color = Color(0xFFF1F5F9))
-                        SettingsRow(icon = Icons.Default.Logout, text = "Logout", isDestructive = true, onClick = {
+                        SettingsRow(icon = Icons.AutoMirrored.Filled.Logout, text = "Logout", isDestructive = true, onClick = {
                             viewModel.logout(context)
-                            navController.navigate("auth") { popUpTo(0) }
+                            onLogout()
                         })
                     }
                 }
@@ -2541,7 +2541,7 @@ class MainActivity : androidx.activity.ComponentActivity() {
                         AuthFlow(viewModel, navController)
                     }
                     composable("dashboard") {
-                        MainAppScreen(viewModel)
+                        MainAppScreen(viewModel, onLogout = { navController.navigate("auth") { popUpTo(0) } })
                     }
                 }
             }
