@@ -211,7 +211,7 @@ data class OrderItem(
     @SerializedName("product_image") val productImage: String? = null
 )
 
-data class RiderLoginRequest(@SerializedName("email") val email: String? = null, val password: String, val is_rider_app: Boolean = true)
+data class RiderLoginRequest(@SerializedName("email") val email: String? = null, @SerializedName("phone") val phone: String? = null, val password: String, val is_rider_app: Boolean = true)
 data class ForgotPasswordRequest(val email: String)
 data class ResetPasswordWithOtpRequest(val email: String, val otp: String, val new_password: String)
 data class ProfileUpdateOtpRequest(val user_id: Int, val new_email: String)
@@ -633,14 +633,15 @@ class RiderViewModel : ViewModel() {
         _authError.value = null
     }
 
-    fun login(email: String, pass: String, context: Context, onSuccess: () -> Unit) {
+    fun login(emailOrPhone: String, pass: String, context: Context, onSuccess: () -> Unit) {
         viewModelScope.launch {
             SessionManager.logout(context)
             _riderId.value = -1
             _authError.value = null
             try {
                 _isLoading.value = true
-                val res = RetrofitClient.apiService.login(RiderLoginRequest(email, pass))
+                val req = if (emailOrPhone.contains("@")) RiderLoginRequest(email = emailOrPhone, password = pass) else RiderLoginRequest(phone = emailOrPhone, password = pass)
+                val res = RetrofitClient.apiService.login(req)
                 android.util.Log.d("API_RESPONSE", "Response: $res")
                 if (res.isSuccessful) {
                     val body = res.body()
@@ -1181,7 +1182,7 @@ fun AuthFlow(viewModel: RiderViewModel, navController: NavHostController) {
 @Composable
 fun LoginScreen(viewModel: RiderViewModel, navController: NavController, onNavigateToRegister: () -> Unit, onNavigateToForgotPassword: () -> Unit = {}) {
     val context = LocalContext.current
-    var email by remember { mutableStateOf("") }
+    var email by remember { mutableStateOf("") } // Actually emailOrPhone
     var password by remember { mutableStateOf("") }
     val isLoading by viewModel.isLoading.collectAsState()
     val authError by viewModel.authError.collectAsState()
@@ -1235,8 +1236,8 @@ fun LoginScreen(viewModel: RiderViewModel, navController: NavController, onNavig
                     OutlinedTextField(
                         value = email,
                         onValueChange = { email = it; viewModel.clearError() },
-                        label = { Text("Email Address") },
-                        keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Email),
+                        label = { Text("Email or Phone Number") },
+                        keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Text),
                         modifier = Modifier.fillMaxWidth(),
                         singleLine = true
                     )
@@ -2306,7 +2307,7 @@ fun ProfileScreen(viewModel: RiderViewModel, navController: NavHostController, o
                 OutlinedTextField(
                     value = emailInput,
                     onValueChange = { emailInput = it },
-                    label = { Text("Email Address") },
+                    label = { Text("Email or Phone Number") },
                     leadingIcon = { Icon(Icons.Default.Email, contentDescription = null, tint = TealAccent) },
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(12.dp),
