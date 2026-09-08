@@ -211,7 +211,7 @@ data class OrderItem(
     @SerializedName("product_image") val productImage: String? = null
 )
 
-data class RiderLoginRequest(@SerializedName("phone") val phone: String? = null, val password: String, val is_rider_app: Boolean = true)
+data class RiderLoginRequest(@SerializedName("email") val email: String? = null, val password: String, val is_rider_app: Boolean = true)
 data class ForgotPasswordRequest(val email: String)
 data class ResetPasswordWithOtpRequest(val email: String, val otp: String, val new_password: String)
 data class ProfileUpdateOtpRequest(val user_id: Int, val new_email: String)
@@ -633,14 +633,14 @@ class RiderViewModel : ViewModel() {
         _authError.value = null
     }
 
-    fun login(phone: String, pass: String, context: Context, onSuccess: () -> Unit) {
+    fun login(email: String, pass: String, context: Context, onSuccess: () -> Unit) {
         viewModelScope.launch {
             SessionManager.logout(context)
             _riderId.value = -1
             _authError.value = null
             try {
                 _isLoading.value = true
-                val res = RetrofitClient.apiService.login(RiderLoginRequest(phone, pass))
+                val res = RetrofitClient.apiService.login(RiderLoginRequest(email, pass))
                 android.util.Log.d("API_RESPONSE", "Response: $res")
                 if (res.isSuccessful) {
                     val body = res.body()
@@ -665,7 +665,7 @@ class RiderViewModel : ViewModel() {
         }
     }
 
-    fun register(name: String, phone: String, pass: String, zones: List<String>, email: String, context: Context) {
+    fun register(name: String, phone: String, pass: String, zones: List<String>, email: String, context: Context, onSuccess: () -> Unit) {
         viewModelScope.launch {
             _authError.value = null
             _pendingApproval.value = false
@@ -674,9 +674,8 @@ class RiderViewModel : ViewModel() {
                 val response = RetrofitClient.apiService.register(RiderRegisterRequest(name, phone, pass, zones, email))
                 if (response.isSuccessful) {
                     val body = response.body()
-                    if (body?.status == "success" && body.data != null) {
-                        _pendingApproval.value = true
-                        _authError.value = "Registration Successful. Awaiting Admin Approval."
+                    if (body?.status == "success") {
+                        onSuccess()
                     } else {
                         _authError.value = body?.message ?: "Registration Failed."
                     }
@@ -1182,7 +1181,7 @@ fun AuthFlow(viewModel: RiderViewModel, navController: NavHostController) {
 @Composable
 fun LoginScreen(viewModel: RiderViewModel, navController: NavController, onNavigateToRegister: () -> Unit, onNavigateToForgotPassword: () -> Unit = {}) {
     val context = LocalContext.current
-    var phone by remember { mutableStateOf("") }
+    var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     val isLoading by viewModel.isLoading.collectAsState()
     val authError by viewModel.authError.collectAsState()
@@ -1234,9 +1233,10 @@ fun LoginScreen(viewModel: RiderViewModel, navController: NavController, onNavig
                     authError?.let { PersistentErrorBanner(it) }
 
                     OutlinedTextField(
-                        value = phone,
-                        onValueChange = { phone = it; viewModel.clearError() },
-                        label = { Text("Phone Number") },
+                        value = email,
+                        onValueChange = { email = it; viewModel.clearError() },
+                        label = { Text("Email Address") },
+                        keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Email),
                         modifier = Modifier.fillMaxWidth(),
                         singleLine = true
                     )
@@ -1251,10 +1251,10 @@ fun LoginScreen(viewModel: RiderViewModel, navController: NavController, onNavig
                     )
                     Spacer(Modifier.height(24.dp))
                     Button(
-                        onClick = { viewModel.login(phone, password, context, onSuccess = { navController.navigate("dashboard") { popUpTo(0) } }) },
+                        onClick = { viewModel.login(email, password, context, onSuccess = { navController.navigate("dashboard") { popUpTo(0) } }) },
                         modifier = Modifier.fillMaxWidth().height(50.dp),
                         colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF03045E)),
-                        enabled = !isLoading && phone.isNotBlank() && password.isNotBlank()
+                        enabled = !isLoading && email.isNotBlank() && password.isNotBlank()
                     ) {
                         if (isLoading) CircularProgressIndicator(color = Color.White, modifier = Modifier.size(24.dp))
                         else Text("LOGIN", color = Color.White, fontWeight = FontWeight.Bold)
@@ -1398,7 +1398,10 @@ fun RegisterScreen(viewModel: RiderViewModel, onNavigateToLogin: () -> Unit) {
                         Button(
                             onClick = {
                                 if (isFormValid) {
-                                    viewModel.register(name, phone, password, viewModel.selectedHubs.toList(), viewModel.email, context)
+                                    viewModel.register(name, phone, password, viewModel.selectedHubs.toList(), viewModel.email, context) {
+                                        android.widget.Toast.makeText(context, "Registration successful. Please wait for Admin approval.", android.widget.Toast.LENGTH_LONG).show()
+                                        onNavigateToLogin()
+                                    }
                                 } else {
                                     android.widget.Toast.makeText(context, "Please fill all fields and select at least one hub.", android.widget.Toast.LENGTH_SHORT).show()
                                 }
