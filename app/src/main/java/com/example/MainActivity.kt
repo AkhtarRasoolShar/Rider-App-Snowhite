@@ -223,10 +223,7 @@ data class RiderRegisterRequest(
     @SerializedName("service_zone") val service_zone: List<String>? = null,
     @SerializedName("email") val email: String? = null
 )
-data class Hub(
-    @SerializedName("id") val id: Int? = null,
-    @SerializedName("name") val name: String? = null
-)
+data class Hub(val id: Int, val name: String)
 
 data class AppSettings(
     val app_name: String? = null,
@@ -423,8 +420,8 @@ class RiderViewModel : ViewModel() {
     var email by androidx.compose.runtime.mutableStateOf("")
     var isFetchingHubs by androidx.compose.runtime.mutableStateOf(false)
     var errorMessage by androidx.compose.runtime.mutableStateOf<String?>(null)
-    var availableHubs by androidx.compose.runtime.mutableStateOf<List<Hub>>(emptyList())
-    var selectedHubs by androidx.compose.runtime.mutableStateOf<Set<String>>(emptySet())
+    val availableHubs = kotlinx.coroutines.flow.MutableStateFlow<List<Hub>>(emptyList())
+    val selectedHubs = androidx.compose.runtime.mutableStateListOf<String>()
     var appSettings by androidx.compose.runtime.mutableStateOf(AppSettings())
 
     init {
@@ -459,7 +456,7 @@ class RiderViewModel : ViewModel() {
                     if (response.isSuccessful) {
                         val body = response.body()
                         if (body?.status == "success" && body.data != null) {
-                            availableHubs = body.data
+                            availableHubs.value = body.data
                             errorMessage = null
                             return@launch
                         } else {
@@ -473,13 +470,7 @@ class RiderViewModel : ViewModel() {
                     errorMessage = "Network Error: Could not connect to server."
                 }
                 
-                // Fallback in case of HTTP 500 or Network Error
-                availableHubs = listOf(
-                    Hub(1, "Clifton"),
-                    Hub(2, "Tariq Road"),
-                    Hub(3, "DHA"),
-                    Hub(4, "Gulshan")
-                )
+
             } finally {
                 isFetchingHubs = false
             }
@@ -1278,6 +1269,7 @@ fun LoginScreen(viewModel: RiderViewModel, navController: NavController, onNavig
 @Composable
 fun RegisterScreen(viewModel: RiderViewModel, onNavigateToLogin: () -> Unit) {
     val context = LocalContext.current
+    val availableHubs by viewModel.availableHubs.collectAsState()
     var name by remember { mutableStateOf("") }
     var phone by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
@@ -1376,13 +1368,17 @@ fun RegisterScreen(viewModel: RiderViewModel, onNavigateToLogin: () -> Unit) {
                                 CircularProgressIndicator(color = TealAccent)
                             }
                         } else {
-                        viewModel.availableHubs.forEach { hub ->
-                            val hubName = hub.name ?: "Unknown"
+                        availableHubs.forEach { hub ->
+                            val hubName = hub.name
                             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
                                 Checkbox(
                                     checked = viewModel.selectedHubs.contains(hubName),
                                     onCheckedChange = { isChecked ->
-                                        viewModel.selectedHubs = if (isChecked) viewModel.selectedHubs + hubName else viewModel.selectedHubs - hubName
+                                        if (isChecked) {
+                                            if (!viewModel.selectedHubs.contains(hubName)) viewModel.selectedHubs.add(hubName)
+                                        } else {
+                                            viewModel.selectedHubs.remove(hubName)
+                                        }
                                         viewModel.errorMessage = null
                                     },
                                     colors = CheckboxDefaults.colors(checkedColor = TealAccent)
